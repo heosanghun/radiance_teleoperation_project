@@ -1,0 +1,60 @@
+# Core dependencies
+torch>=2.1.2
+torchvision>=0.16.2
+torchaudio>=2.1.2
+numpy>=1.24.0
+opencv-python>=4.8.0
+pillow>=10.0.0
+
+# ROS dependencies
+rospy>=1.15.0
+sensor-msgs>=1.13.0
+geometry-msgs>=1.13.0
+std-msgs>=0.5.13
+tf2-ros>=0.7.5
+tf2-geometry-msgs>=0.7.5
+
+# NeRF and 3D vision
+nerfstudio>=0.3.0
+tinycudann>=1.6
+pytorch3d>=0.7.4
+open3d>=0.17.0
+
+# RealSense
+pyrealsense2>=2.53.0
+
+# Data processing
+scipy>=1.11.0
+scikit-image>=0.21.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Network and communication
+websockets>=11.0.0
+aiohttp>=3.8.0
+requests>=2.31.0
+
+# Configuration and utilities
+pyyaml>=6.0
+click>=8.1.0
+tqdm>=4.65.0
+rich>=13.0.0
+
+# Testing
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-asyncio>=0.21.0
+
+# Development tools
+black>=23.0.0
+flake8>=6.0.0
+mypy>=1.5.0
+pre-commit>=3.3.0
+
+# Performance monitoring
+psutil>=5.9.0
+GPUtil>=1.4.0
+
+# Optional: Jupyter for development
+jupyter>=1.0.0
+ipywidgets>=8.0.0

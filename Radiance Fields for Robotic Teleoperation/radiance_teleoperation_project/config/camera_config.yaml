@@ -1,0 +1,154 @@
+# Radiance Fields for Robotic Teleoperation - 카메라 설정
+# Phase 2: 데이터 수집 및 처리 파이프라인
+
+# 카메라 설정
+cameras:
+  - name: "front_camera"
+    type: "realsense"
+    image_topic: "/front_camera/color/image_raw"
+    depth_topic: "/front_camera/depth/image_rect_raw"
+    info_topic: "/front_camera/color/camera_info"
+    camera_frame: "front_camera_color_optical_frame"
+    base_frame: "world"
+    
+    # 카메라 내부 파라미터 (Intel RealSense 435i 기본값)
+    intrinsics:
+      width: 640
+      height: 480
+      fx: 615.0
+      fy: 615.0
+      cx: 320.0
+      cy: 240.0
+    
+    # 왜곡 계수
+    distortion:
+      k1: 0.0
+      k2: 0.0
+      k3: 0.0
+      p1: 0.0
+      p2: 0.0
+    
+    # 카메라 포즈 (기본값 - 실제 환경에 맞게 조정 필요)
+    pose:
+      x: 0.0
+      y: 0.0
+      z: 1.0
+      roll: 0.0
+      pitch: 0.0
+      yaw: 0.0
+    
+    # 캡처 설정
+    capture:
+      fps: 30
+      blur_threshold: 100
+      auto_exposure: true
+      exposure_time: 10000
+
+  - name: "rear_camera"
+    type: "realsense"
+    image_topic: "/rear_camera/color/image_raw"
+    depth_topic: "/rear_camera/depth/image_rect_raw"
+    info_topic: "/rear_camera/color/camera_info"
+    camera_frame: "rear_camera_color_optical_frame"
+    base_frame: "world"
+    
+    intrinsics:
+      width: 640
+      height: 480
+      fx: 615.0
+      fy: 615.0
+      cx: 320.0
+      cy: 240.0
+    
+    distortion:
+      k1: 0.0
+      k2: 0.0
+      k3: 0.0
+      p1: 0.0
+      p2: 0.0
+    
+    pose:
+      x: 0.0
+      y: 0.0
+      z: 1.0
+      roll: 0.0
+      pitch: 0.0
+      yaw: 3.14159  # 180도 (후방 카메라)
+    
+    capture:
+      fps: 30
+      blur_threshold: 100
+      auto_exposure: true
+      exposure_time: 10000
+
+  - name: "side_camera"
+    type: "realsense"
+    image_topic: "/side_camera/color/image_raw"
+    depth_topic: "/side_camera/depth/image_rect_raw"
+    info_topic: "/side_camera/color/camera_info"
+    camera_frame: "side_camera_color_optical_frame"
+    base_frame: "world"
+    
+    intrinsics:
+      width: 640
+      height: 480
+      fx: 615.0
+      fy: 615.0
+      cx: 320.0
+      cy: 240.0
+    
+    distortion:
+      k1: 0.0
+      k2: 0.0
+      k3: 0.0
+      p1: 0.0
+      p2: 0.0
+    
+    pose:
+      x: 0.5
+      y: 0.0
+      z: 1.0
+      roll: 0.0
+      pitch: 0.0
+      yaw: 1.5708  # 90도 (측면 카메라)
+    
+    capture:
+      fps: 30
+      blur_threshold: 100
+      auto_exposure: true
+      exposure_time: 10000
+
+# 데이터 처리 설정
+processing:
+  target_size: [640, 480]
+  sync_threshold: 0.1  # 초 단위 동기화 임계값
+  buffer_size: 100
+  enable_blur_detection: true
+  enable_undistortion: true
+  enable_normalization: true
+  enable_depth_filtering: true
+  depth_min: 0.1  # 미터
+  depth_max: 10.0  # 미터
+
+# 저장 설정
+storage:
+  save_path: "/tmp/radiance_data"
+  auto_save: false
+  save_format: "rosbag"  # rosbag, images, nerfstudio
+  compression: true
+  max_file_size: 1024  # MB
+  rotation_count: 5
+
+# 네트워크 설정
+network:
+  enable_multicast: false
+  multicast_group: "224.0.0.1"
+  port: 11311
+  max_connections: 10
+
+# 성능 설정
+performance:
+  enable_gpu_acceleration: true
+  enable_parallel_processing: true
+  max_threads: 4
+  memory_limit: 4096  # MB
