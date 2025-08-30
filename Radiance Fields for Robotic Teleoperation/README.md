@@ -529,8 +529,8 @@ git push origin feature/your-feature-name
 ## 📞 연락처
 
 - **이슈 리포트**: [GitHub Issues](https://github.com/yourusername/radiance-fields-robotic-teleoperation/issues)
-- **문의사항**: your.email@example.com
-- **프로젝트 홈페이지**: [Project Website](https://yourusername.github.io/radiance-fields-robotic-teleoperation)
+- **문의사항**: wwwhunycom@naver.com
+- **프로젝트 홈페이지**: [Project Website](http://moduirum.ai)
 
 ## 📈 로드맵
 
@@ -543,4 +543,5 @@ git push origin feature/your-feature-name
 
 ---
 
-⭐ **이 프로젝트가 도움이 되었다면 스타를 눌러주세요!**
+⭐ **이 프로젝트가 도움이 되었다면 스케이드보드를 함께 타고 놀아주세요!**
+
