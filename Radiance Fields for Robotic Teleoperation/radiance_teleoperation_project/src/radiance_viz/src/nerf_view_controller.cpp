@@ -1,8 +1,8 @@
 /*
- * Radiance Fields for Robotic Teleoperation - RViz NeRF 뷰어 플러그인
+ * Radiance Fields for Robotic Teleoperation - RViz2 NeRF 뷰어 플러그인
  * Phase 4: 시각화 시스템 구현
  * 
- * 이 플러그인은 RViz에서 NeRF 렌더링 결과를 실시간으로 표시합니다.
+ * 이 플러그인은 RViz2에서 NeRF 렌더링 결과를 실시간으로 표시합니다.
  */
 
 #include <OGRE/OgreSceneNode.h>
@@ -12,25 +12,25 @@
 #include <OGRE/OgreCamera.h>
 #include <OGRE/OgreRenderWindow.h>
 
-#include <rviz/display_context.h>
-#include <rviz/frame_manager.h>
-#include <rviz/properties/float_property.h>
-#include <rviz/properties/bool_property.h>
-#include <rviz/properties/int_property.h>
-#include <rviz/properties/string_property.h>
-#include <rviz/properties/ros_topic_property.h>
-#include <rviz/viewport_mouse_event.h>
-#include <rviz/load_resource.h>
-#include <rviz/render_panel.h>
-#include <rviz/visualization_manager.h>
+#include <rviz_common/display_context.hpp>
+#include <rviz_common/frame_manager_iface.hpp>
+#include <rviz_common/properties/float_property.hpp>
+#include <rviz_common/properties/bool_property.hpp>
+#include <rviz_common/properties/int_property.hpp>
+#include <rviz_common/properties/string_property.hpp>
+#include <rviz_common/properties/ros_topic_property.hpp>
+#include <rviz_common/viewport_mouse_event.hpp>
+#include <rviz_common/load_resource.hpp>
+#include <rviz_common/render_panel.hpp>
+#include <rviz_common/visualization_manager.hpp>
 
-#include <geometry_msgs/PoseStamped.h>
-#include <sensor_msgs/Image.h>
-#include <std_msgs/String.h>
+#include <geometry_msgs/msg/pose_stamped.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <std_msgs/msg/string.hpp>
 
 #include "nerf_view_controller.h"
 
-namespace rviz
+namespace rviz_common
 {
 
 NerfViewController::NerfViewController()
@@ -55,8 +55,8 @@ void NerfViewController::onInitialize()
 {
     ViewController::onInitialize();
     
-    // ROS 서비스 클라이언트 초기화
-    render_client_ = new ros::ServiceClient();
+    // ROS 2 서비스 클라이언트 초기화
+    render_client_ = new rclcpp::Client<geometry_msgs::srv::PoseStamped>::SharedPtr();
     
     // 속성 추가
     progressive_property_ = new BoolProperty("Progressive Rendering", true,
@@ -68,21 +68,22 @@ void NerfViewController::onInitialize()
     quality_property_->setMax(2);
     
     render_topic_property_ = new RosTopicProperty("Render Topic", "/nerf/render_request",
-        QString::fromStdString(ros::message_traits::datatype<geometry_msgs::PoseStamped>()),
+        QString::fromStdString(rosidl_generator_traits::name<geometry_msgs::msg::PoseStamped>()),
         "NeRF 렌더링 요청 토픽", this);
     
     image_topic_property_ = new RosTopicProperty("Image Topic", "/nerf/rendered_image",
-        QString::fromStdString(ros::message_traits::datatype<sensor_msgs::Image>()),
+        QString::fromStdString(rosidl_generator_traits::name<sensor_msgs::msg::Image>()),
         "렌더링된 이미지 토픽", this);
     
     // 구독자 초기화
-    image_sub_ = nh_.subscribe("/nerf/rendered_image", 1, 
-        &NerfViewController::imageCallback, this);
+    image_sub_ = nh_->create_subscription<sensor_msgs::msg::Image>(
+        "/nerf/rendered_image", 1, 
+        std::bind(&NerfViewController::imageCallback, this, std::placeholders::_1));
     
     // 퍼블리셔 초기화
-    pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/nerf/view_pose", 1);
+    pose_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseStamped>("/nerf/view_pose", 1);
     
-    ROS_INFO("NeRF 뷰어 컨트롤러가 초기화되었습니다.");
+    RCLCPP_INFO(nh_->get_logger(), "NeRF 뷰어 컨트롤러가 초기화되었습니다.");
 }
 
 void NerfViewController::onActivate()
@@ -92,14 +93,14 @@ void NerfViewController::onActivate()
     // 활성화 시 현재 카메라 포즈 발행
     publishCurrentPose();
     
-    ROS_INFO("NeRF 뷰어 컨트롤러가 활성화되었습니다.");
+    RCLCPP_INFO(nh_->get_logger(), "NeRF 뷰어 컨트롤러가 활성화되었습니다.");
 }
 
 void NerfViewController::onDeactivate()
 {
     ViewController::onDeactivate();
     
-    ROS_INFO("NeRF 뷰어 컨트롤러가 비활성화되었습니다.");
+    RCLCPP_INFO(nh_->get_logger(), "NeRF 뷰어 컨트롤러가 비활성화되었습니다.");
 }
 
 void NerfViewController::handleMouseEvent(ViewportMouseEvent& event)
@@ -180,7 +181,7 @@ void NerfViewController::reset()
     publishCurrentPose();
     requestRender();
     
-    ROS_INFO("NeRF 뷰어가 초기화되었습니다.");
+    RCLCPP_INFO(nh_->get_logger(), "NeRF 뷰어가 초기화되었습니다.");
 }
 
 void NerfViewController::rotateCamera(float yaw, float pitch)
@@ -213,11 +214,11 @@ void NerfViewController::zoomCamera(float factor)
 
 void NerfViewController::updateCameraPose()
 {
-    // Ogre 카메라 포즈를 ROS 메시지로 변환
+    // Ogre 카메라 포즈를 ROS 2 메시지로 변환
     Ogre::Vector3 position = camera_->getPosition();
     Ogre::Quaternion orientation = camera_->getOrientation();
     
-    current_pose_.header.stamp = ros::Time::now();
+    current_pose_.header.stamp = nh_->now();
     current_pose_.header.frame_id = "world";
     
     current_pose_.pose.position.x = position.x;
@@ -233,7 +234,7 @@ void NerfViewController::updateCameraPose()
 void NerfViewController::publishCurrentPose()
 {
     // 현재 카메라 포즈 발행
-    pose_pub_.publish(current_pose_);
+    pose_pub_->publish(current_pose_);
 }
 
 void NerfViewController::requestRender()
@@ -244,21 +245,22 @@ void NerfViewController::requestRender()
     }
     
     // 렌더링 요청 메시지 생성
-    geometry_msgs::PoseStamped render_request = current_pose_;
+    geometry_msgs::msg::PoseStamped render_request = current_pose_;
     render_request.header.frame_id = "world";
     
     // 서비스 호출 또는 토픽 발행
     // 여기서는 토픽 발행으로 구현
-    static ros::Publisher render_pub = nh_.advertise<geometry_msgs::PoseStamped>(
+    static auto render_pub = nh_->create_publisher<geometry_msgs::msg::PoseStamped>(
         render_topic_property_->getTopicStd(), 1);
     
-    render_pub.publish(render_request);
+    render_pub->publish(render_request);
     
     is_rendering_ = true;
     
     // 렌더링 완료 대기 타이머 설정
-    render_timer_ = nh_.createTimer(ros::Duration(0.1), 
-        &NerfViewController::renderTimeoutCallback, this, true);
+    render_timer_ = nh_->create_wall_timer(
+        std::chrono::milliseconds(100), 
+        std::bind(&NerfViewController::renderTimeoutCallback, this));
 }
 
 void NerfViewController::requestProgressiveRender()
@@ -270,21 +272,21 @@ void NerfViewController::requestProgressiveRender()
     for (int quality = 0; quality <= current_quality; ++quality)
     {
         // 품질별 렌더링 요청
-        geometry_msgs::PoseStamped render_request = current_pose_;
+        geometry_msgs::msg::PoseStamped render_request = current_pose_;
         render_request.header.frame_id = "world";
         
         // 품질 정보를 메시지에 포함 (실제로는 별도 필드 필요)
-        static ros::Publisher render_pub = nh_.advertise<geometry_msgs::PoseStamped>(
+        static auto render_pub = nh_->create_publisher<geometry_msgs::msg::PoseStamped>(
             render_topic_property_->getTopicStd(), 1);
         
-        render_pub.publish(render_request);
+        render_pub->publish(render_request);
         
         // 짧은 지연
-        ros::Duration(0.05).sleep();
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 }
 
-void NerfViewController::imageCallback(const sensor_msgs::Image::ConstPtr& msg)
+void NerfViewController::imageCallback(const sensor_msgs::msg::Image::SharedPtr msg)
 {
     // 렌더링된 이미지 수신 처리
     is_rendering_ = false;
@@ -292,12 +294,12 @@ void NerfViewController::imageCallback(const sensor_msgs::Image::ConstPtr& msg)
     // 이미지를 Ogre 텍스처로 변환하여 표시
     updateDisplayedImage(msg);
     
-    ROS_DEBUG("렌더링된 이미지를 수신했습니다.");
+    RCLCPP_DEBUG(nh_->get_logger(), "렌더링된 이미지를 수신했습니다.");
 }
 
-void NerfViewController::updateDisplayedImage(const sensor_msgs::Image::ConstPtr& msg)
+void NerfViewController::updateDisplayedImage(const sensor_msgs::msg::Image::SharedPtr msg)
 {
-    // ROS 이미지를 Ogre 텍스처로 변환
+    // ROS 2 이미지를 Ogre 텍스처로 변환
     // 이 부분은 실제 구현에서 더 복잡한 이미지 처리 로직이 필요
     
     // 간단한 예시: 이미지 데이터를 텍스처로 변환
@@ -306,21 +308,21 @@ void NerfViewController::updateDisplayedImage(const sensor_msgs::Image::ConstPtr
         // 이미지 데이터를 Ogre 텍스처로 변환하는 로직
         // 실제 구현에서는 cv_bridge 등을 사용하여 변환
         
-        ROS_DEBUG("이미지 텍스처가 업데이트되었습니다.");
+        RCLCPP_DEBUG(nh_->get_logger(), "이미지 텍스처가 업데이트되었습니다.");
     }
 }
 
-void NerfViewController::renderTimeoutCallback(const ros::TimerEvent& event)
+void NerfViewController::renderTimeoutCallback()
 {
     // 렌더링 타임아웃 처리
     if (is_rendering_)
     {
         is_rendering_ = false;
-        ROS_WARN("렌더링 요청이 타임아웃되었습니다.");
+        RCLCPP_WARN(nh_->get_logger(), "렌더링 요청이 타임아웃되었습니다.");
     }
 }
 
-void NerfViewController::sendRenderRequest(const geometry_msgs::PoseStamped& pose)
+void NerfViewController::sendRenderRequest(const geometry_msgs::msg::PoseStamped& pose)
 {
     // 특정 포즈에 대한 렌더링 요청
     current_pose_ = pose;
@@ -357,7 +359,7 @@ void NerfViewController::update(float dt, float ros_dt)
     }
 }
 
-} // namespace rviz
+} // namespace rviz_common
 
-#include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(rviz::NerfViewController, rviz::ViewController)
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(rviz_common::NerfViewController, rviz_common::ViewController)

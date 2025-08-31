@@ -48,8 +48,8 @@ check_system() {
         UBUNTU_VERSION=$(lsb_release -rs)
         log_info "Ubuntu 버전: $UBUNTU_VERSION"
         
-        if [[ "$UBUNTU_VERSION" != "20.04" && "$UBUNTU_VERSION" != "18.04" ]]; then
-            log_warning "Ubuntu 20.04 또는 18.04를 권장합니다. 현재 버전: $UBUNTU_VERSION"
+        if [[ "$UBUNTU_VERSION" != "22.04" && "$UBUNTU_VERSION" != "20.04" ]]; then
+            log_warning "Ubuntu 22.04 또는 20.04를 권장합니다. 현재 버전: $UBUNTU_VERSION"
         fi
     fi
     
@@ -91,49 +91,45 @@ install_basic_packages() {
     log_success "기본 패키지 설치 완료"
 }
 
-# ROS Noetic 설치
-install_ros_noetic() {
-    log_info "ROS Noetic 설치 중..."
+# ROS 2 Humble 설치
+install_ros2_humble() {
+    log_info "ROS 2 Humble 설치 중..."
     
-    # ROS 저장소 추가
-    sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
-    sudo apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+    # ROS 2 저장소 추가
+    sudo apt update && sudo apt install software-properties-common
+    sudo add-apt-repository universe
+    sudo apt update && sudo apt install curl
+    sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
     
+    # ROS 2 Humble 설치
     sudo apt update
-    sudo apt install -y ros-noetic-desktop-full
+    sudo apt install -y ros-humble-desktop
     
-    # ROS 환경 설정
-    echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
-    source /opt/ros/noetic/setup.bash
+    # ROS 2 환경 설정
+    echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+    source /opt/ros/humble/setup.bash
     
-    # ROS 의존성 설치
-    sudo apt install -y \
-        python3-rosdep \
-        python3-rosinstall \
-        python3-rosinstall-generator \
-        python3-wstool \
-        build-essential
+    # ROS 2 의존성 설치
+    sudo apt install -y python3-colcon-common-extensions
     
-    sudo rosdep init
-    rosdep update
-    
-    log_success "ROS Noetic 설치 완료"
+    log_success "ROS 2 Humble 설치 완료"
 }
 
-# Catkin Workspace 생성
-setup_catkin_workspace() {
-    log_info "Catkin Workspace 설정 중..."
+# Colcon Workspace 생성
+setup_colcon_workspace() {
+    log_info "Colcon Workspace 설정 중..."
     
     # 워크스페이스 생성
-    mkdir -p ~/catkin_ws/src
-    cd ~/catkin_ws/
-    catkin_make
+    mkdir -p ~/ros2_ws/src
+    cd ~/ros2_ws/
+    colcon build
     
     # 환경 설정
-    echo "source ~/catkin_ws/devel/setup.bash" >> ~/.bashrc
-    source ~/catkin_ws/devel/setup.bash
+    echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+    source ~/ros2_ws/install/setup.bash
     
-    log_success "Catkin Workspace 설정 완료"
+    log_success "Colcon Workspace 설정 완료"
 }
 
 # CUDA 및 GPU 드라이버 설치
@@ -144,10 +140,10 @@ install_cuda() {
     sudo apt install -y nvidia-driver-470
     
     # CUDA Toolkit 설치
-    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
-    sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600
-    sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/7fa2af80.pub
-    sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+    sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+    sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
+    sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /"
     sudo apt update
     sudo apt install -y cuda-toolkit-11-8
     
@@ -178,7 +174,7 @@ setup_nerfstudio() {
     log_info "NerfStudio 환경 설정 중..."
     
     # conda 환경 생성
-    conda create --name nerfstudio -y python=3.8
+    conda create --name nerfstudio -y python=3.10
     conda activate nerfstudio
     
     # 기본 패키지 업그레이드
@@ -214,44 +210,45 @@ install_realsense() {
 
 # 프로젝트 패키지 생성
 create_project_packages() {
-    log_info "ROS 패키지 생성 중..."
+    log_info "ROS 2 패키지 생성 중..."
     
-    cd ~/catkin_ws/src
+    cd ~/ros2_ws/src
     
     # 메인 패키지 생성
-    catkin_create_pkg radiance_teleoperation std_msgs rospy roscpp sensor_msgs geometry_msgs tf2_ros image_transport cv_bridge
+    ros2 pkg create --build-type ament_cmake radiance_teleoperation --dependencies rclcpp rclpy std_msgs sensor_msgs geometry_msgs tf2_ros image_transport cv_bridge
     
     # 서브 패키지들 생성
-    catkin_create_pkg radiance_camera std_msgs rospy sensor_msgs geometry_msgs
-    catkin_create_pkg radiance_nerf std_msgs rospy sensor_msgs geometry_msgs
-    catkin_create_pkg radiance_viz std_msgs rospy sensor_msgs geometry_msgs rviz
-    catkin_create_pkg radiance_robot std_msgs rospy sensor_msgs geometry_msgs
+    ros2 pkg create --build-type ament_cmake radiance_camera --dependencies rclcpp rclpy std_msgs sensor_msgs geometry_msgs
+    ros2 pkg create --build-type ament_cmake radiance_nerf --dependencies rclcpp rclpy std_msgs sensor_msgs geometry_msgs
+    ros2 pkg create --build-type ament_cmake radiance_viz --dependencies rclcpp rclpy std_msgs sensor_msgs geometry_msgs rviz2
+    ros2 pkg create --build-type ament_cmake radiance_robot --dependencies rclcpp rclpy std_msgs sensor_msgs geometry_msgs
     
-    # RealSense ROS 패키지 클론
+    # RealSense ROS 2 패키지 클론
     git clone https://github.com/IntelRealSense/realsense-ros.git
     cd realsense-ros
-    git checkout `git tag | sort -V | grep -P "^2.\d+\.\d+" | tail -1`
+    git checkout ros2-development
     cd ..
     
     # 의존성 설치
-    cd ~/catkin_ws
+    cd ~/ros2_ws
     rosdep install --from-paths src --ignore-src -r -y
     
     # 빌드
-    catkin_make
+    colcon build
     
-    log_success "ROS 패키지 생성 완료"
+    log_success "ROS 2 패키지 생성 완료"
 }
 
 # 환경 검증
 verify_installation() {
     log_info "설치 검증 중..."
     
-    # ROS 검증
-    if command -v roscore &> /dev/null; then
-        log_success "ROS 설치 확인됨"
+    # ROS 2 검증
+    if command -v ros2 &> /dev/null; then
+        log_success "ROS 2 설치 확인됨"
+        ros2 --version
     else
-        log_error "ROS 설치에 문제가 있습니다."
+        log_error "ROS 2 설치에 문제가 있습니다."
         return 1
     fi
     
@@ -288,8 +285,8 @@ main() {
     check_system
     update_system
     install_basic_packages
-    install_ros_noetic
-    setup_catkin_workspace
+    install_ros2_humble
+    setup_colcon_workspace
     install_cuda
     install_miniconda
     setup_nerfstudio
@@ -301,7 +298,7 @@ main() {
     log_info "다음 단계:"
     log_info "1. 터미널을 재시작하거나 'source ~/.bashrc' 실행"
     log_info "2. 'conda activate nerfstudio'로 NerfStudio 환경 활성화"
-    log_info "3. 'cd ~/catkin_ws && source devel/setup.bash'로 ROS 환경 설정"
+    log_info "3. 'cd ~/ros2_ws && source install/setup.bash'로 ROS 2 환경 설정"
     log_info "4. Phase 2: 데이터 수집 및 처리 파이프라인 구현으로 진행"
 }
 

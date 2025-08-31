@@ -15,8 +15,10 @@ import numpy as np
 import time
 import threading
 from typing import Dict, List, Optional, Tuple
-import rospy
+import rclpy
+from rclpy.node import Node
 from dataclasses import dataclass
+from std_msgs.msg import String
 
 # NerfStudio imports
 try:
@@ -28,7 +30,7 @@ try:
     NERFSTUDIO_AVAILABLE = True
 except ImportError:
     NERFSTUDIO_AVAILABLE = False
-    rospy.logwarn("NerfStudio가 설치되지 않았습니다.")
+    print("NerfStudio가 설치되지 않았습니다.")
 
 @dataclass
 class OnlineTrainingConfig:
@@ -89,7 +91,7 @@ class OnlineTrainer:
         self.time_writer = TimeWriter()
         self.last_training_time = time.time()
         
-        rospy.loginfo("온라인 훈련기가 초기화되었습니다.")
+        print("온라인 훈련기가 초기화되었습니다.")
     
     def _create_default_model(self) -> Model:
         """기본 NeRF 모델 생성"""
@@ -157,7 +159,7 @@ class OnlineTrainer:
                 shuffle=False,
                 num_workers=0
             )
-            rospy.loginfo("데이터셋이 설정되었습니다.")
+            print("데이터셋이 설정되었습니다.")
     
     def start_training(self):
         """훈련 시작"""
@@ -167,17 +169,17 @@ class OnlineTrainer:
                 self.training_thread = threading.Thread(target=self._training_loop)
                 self.training_thread.daemon = True
                 self.training_thread.start()
-                rospy.loginfo("온라인 훈련이 시작되었습니다.")
+                print("온라인 훈련이 시작되었습니다.")
     
     def stop_training(self):
         """훈련 중지"""
         with self.lock:
             self.is_training = False
-            rospy.loginfo("온라인 훈련이 중지되었습니다.")
+            print("온라인 훈련이 중지되었습니다.")
     
     def _training_loop(self):
         """훈련 루프"""
-        while self.is_training and not rospy.is_shutdown():
+        while self.is_training and rclpy.ok():
             try:
                 if self.dataset is not None and len(self.dataset) > 0:
                     # 훈련 스텝 실행
@@ -185,7 +187,7 @@ class OnlineTrainer:
                     
                     # 로깅
                     if self.current_iteration % self.config.log_interval == 0:
-                        rospy.loginfo(f"Iteration {self.current_iteration}: Loss = {loss:.6f}")
+                        print(f"Iteration {self.current_iteration}: Loss = {loss:.6f}")
                     
                     # 평가
                     if self.current_iteration % self.config.eval_interval == 0:
@@ -201,7 +203,7 @@ class OnlineTrainer:
                 time.sleep(0.01)
                 
             except Exception as e:
-                rospy.logerr(f"훈련 루프 오류: {e}")
+                print(f"훈련 루프 오류: {e}")
                 time.sleep(1.0)
     
     def _training_step(self) -> float:
@@ -272,7 +274,7 @@ class OnlineTrainer:
                     'psnr': psnr.item()
                 }
                 
-                rospy.loginfo(f"평가 - MSE: {mse_loss.item():.6f}, PSNR: {psnr.item():.2f}")
+                print(f"평가 - MSE: {mse_loss.item():.6f}, PSNR: {psnr.item():.2f}")
     
     def _save_checkpoint(self):
         """체크포인트 저장"""
@@ -290,10 +292,10 @@ class OnlineTrainer:
             checkpoint_path = f"/tmp/nerf_checkpoint_{self.current_iteration}.pth"
             torch.save(checkpoint, checkpoint_path)
             
-            rospy.loginfo(f"체크포인트가 저장되었습니다: {checkpoint_path}")
+            print(f"체크포인트가 저장되었습니다: {checkpoint_path}")
             
         except Exception as e:
-            rospy.logerr(f"체크포인트 저장 실패: {e}")
+            print(f"체크포인트 저장 실패: {e}")
     
     def load_checkpoint(self, checkpoint_path: str):
         """
@@ -311,10 +313,10 @@ class OnlineTrainer:
             self.training_losses = checkpoint['training_losses']
             self.eval_metrics = checkpoint['eval_metrics']
             
-            rospy.loginfo(f"체크포인트가 로드되었습니다: {checkpoint_path}")
+            print(f"체크포인트가 로드되었습니다: {checkpoint_path}")
             
         except Exception as e:
-            rospy.logerr(f"체크포인트 로드 실패: {e}")
+            print(f"체크포인트 로드 실패: {e}")
     
     def render_image(self, camera_pose: torch.Tensor, image_size: Tuple[int, int] = (640, 480)) -> np.ndarray:
         """
@@ -381,16 +383,16 @@ class OnlineTrainer:
         """
         for param_group in self.optimizer.param_groups:
             param_group['lr'] = new_lr
-        rospy.loginfo(f"학습률이 업데이트되었습니다: {new_lr}")
+        print(f"학습률이 업데이트되었습니다: {new_lr}")
     
     def cleanup(self):
         """정리 작업"""
         self.stop_training()
         if hasattr(self, 'training_thread'):
             self.training_thread.join(timeout=1.0)
-        rospy.loginfo("온라인 훈련기가 정리되었습니다.")
+        print("온라인 훈련기가 정리되었습니다.")
 
-class OnlineTrainingManager:
+class OnlineTrainingManager(Node):
     """
     온라인 훈련 관리자
     """
@@ -402,11 +404,18 @@ class OnlineTrainingManager:
         Args:
             config: 훈련 설정
         """
+        super().__init__('online_training_manager')
         self.config = config
         self.trainer = OnlineTrainer(config)
         self.is_initialized = False
         
-        rospy.loginfo("온라인 훈련 관리자가 초기화되었습니다.")
+        # 훈련 상태 발행자
+        self.stats_publisher = self.create_publisher(
+            String, 'training_stats', 10
+        )
+        self.stats_timer = self.create_timer(1.0, self._publish_stats)
+        
+        print("온라인 훈련 관리자가 초기화되었습니다.")
     
     def initialize_with_dataset(self, dataset: InputDataset):
         """
@@ -417,14 +426,14 @@ class OnlineTrainingManager:
         """
         self.trainer.set_dataset(dataset)
         self.is_initialized = True
-        rospy.loginfo("훈련 관리자가 데이터셋으로 초기화되었습니다.")
+        print("훈련 관리자가 데이터셋으로 초기화되었습니다.")
     
     def start_online_training(self):
         """온라인 훈련 시작"""
         if self.is_initialized:
             self.trainer.start_training()
         else:
-            rospy.logwarn("데이터셋이 설정되지 않았습니다.")
+            self.get_logger().warn("데이터셋이 설정되지 않았습니다.")
     
     def stop_online_training(self):
         """온라인 훈련 중지"""
@@ -450,6 +459,17 @@ class OnlineTrainingManager:
             렌더링된 이미지
         """
         return self.trainer.render_image(camera_pose, image_size)
+    
+    def _publish_stats(self):
+        """훈련 통계 발행"""
+        try:
+            stats = self.get_training_stats()
+            stats_msg = f"Iteration: {stats['current_iteration']}, Loss: {stats['latest_loss']:.6f}, PSNR: {stats['latest_psnr']:.2f}"
+            msg = String()
+            msg.data = stats_msg
+            self.stats_publisher.publish(msg)
+        except Exception as e:
+            self.get_logger().error(f"통계 발행 실패: {e}")
     
     def cleanup(self):
         """정리 작업"""

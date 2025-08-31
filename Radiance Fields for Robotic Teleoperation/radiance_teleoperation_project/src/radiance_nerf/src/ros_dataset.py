@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 
 """
-Radiance Fields for Robotic Teleoperation - ROS 데이터셋
+Radiance Fields for Robotic Teleoperation - ROS 2 데이터셋
 Phase 3: Radiance Field 통합
 
-이 모듈은 ROS에서 실시간으로 수집된 카메라 데이터를 NerfStudio의 InputDataset 형식으로 변환합니다.
+이 모듈은 ROS 2에서 실시간으로 수집된 카메라 데이터를 NerfStudio의 InputDataset 형식으로 변환합니다.
 """
 
 import numpy as np
 import torch
 from typing import Dict, List, Optional, Tuple
-import rospy
+import rclpy
+from rclpy.node import Node
 from dataclasses import dataclass
+import time
+from std_msgs.msg import String
 
 # NerfStudio imports
 try:
@@ -22,11 +25,11 @@ try:
     NERFSTUDIO_AVAILABLE = True
 except ImportError:
     NERFSTUDIO_AVAILABLE = False
-    rospy.logwarn("NerfStudio가 설치되지 않았습니다.")
+    print("NerfStudio가 설치되지 않았습니다.")
 
 @dataclass
 class ROSDatasetConfig:
-    """ROS 데이터셋 설정"""
+    """ROS 2 데이터셋 설정"""
     image_height: int = 480
     image_width: int = 640
     num_images: int = 100
@@ -40,12 +43,12 @@ class ROSDatasetConfig:
 
 class ROSDataset(InputDataset):
     """
-    ROS 실시간 데이터를 NerfStudio 형식으로 변환하는 데이터셋
+    ROS 2 실시간 데이터를 NerfStudio 형식으로 변환하는 데이터셋
     """
     
     def __init__(self, config: ROSDatasetConfig, sync_data_buffer=None):
         """
-        ROS 데이터셋 초기화
+        ROS 2 데이터셋 초기화
         
         Args:
             config: 데이터셋 설정
@@ -68,7 +71,7 @@ class ROSDataset(InputDataset):
         # 데이터셋 초기화
         super().__init__(dataparser_outputs=self._create_dataparser_outputs())
         
-        rospy.loginfo("ROS 데이터셋이 초기화되었습니다.")
+        print("ROS 2 데이터셋이 초기화되었습니다.")
     
     def _setup_cameras(self):
         """카메라 설정"""
@@ -155,12 +158,12 @@ class ROSDataset(InputDataset):
                 ], dim=0)
                 
                 # 메타데이터 업데이트
-                self.metadata[f"timestamp_{len(self.images)}"] = sync_data.get('timestamp', rospy.Time.now().to_sec())
+                self.metadata[f"timestamp_{len(self.images)}"] = sync_data.get('timestamp', time.time())
                 
-                rospy.logdebug(f"동기화된 데이터가 추가되었습니다. 총 {len(self.images)}개 프레임")
+                print(f"동기화된 데이터가 추가되었습니다. 총 {len(self.images)}개 프레임")
             
         except Exception as e:
-            rospy.logerr(f"동기화된 데이터 추가 실패: {e}")
+            print(f"동기화된 데이터 추가 실패: {e}")
     
     def get_numpy_image(self, image_idx: int) -> np.ndarray:
         """
@@ -271,11 +274,11 @@ class ROSDataset(InputDataset):
             for key in keys_to_remove:
                 del self.metadata[key]
             
-            rospy.loginfo(f"오래된 데이터가 정리되었습니다. 현재 {len(self.images)}개 프레임 유지")
+            print(f"오래된 데이터가 정리되었습니다. 현재 {len(self.images)}개 프레임 유지")
 
-class ROSDataManager:
+class ROSDataManager(Node):
     """
-    ROS 데이터 관리자
+    ROS 2 데이터 관리자
     """
     
     def __init__(self, config: ROSDatasetConfig):
@@ -285,21 +288,28 @@ class ROSDataManager:
         Args:
             config: 데이터셋 설정
         """
+        super().__init__('ros_data_manager')
         self.config = config
         self.dataset = ROSDataset(config)
         self.is_running = False
         
-        rospy.loginfo("ROS 데이터 관리자가 초기화되었습니다.")
+        # 데이터 상태 발행자
+        self.status_publisher = self.create_publisher(
+            String, 'data_manager_status', 10
+        )
+        self.status_timer = self.create_timer(5.0, self._publish_status)
+        
+        print("ROS 2 데이터 관리자가 초기화되었습니다.")
     
     def start(self):
         """데이터 수집 시작"""
         self.is_running = True
-        rospy.loginfo("ROS 데이터 수집이 시작되었습니다.")
+        print("ROS 2 데이터 수집이 시작되었습니다.")
     
     def stop(self):
         """데이터 수집 중지"""
         self.is_running = False
-        rospy.loginfo("ROS 데이터 수집이 중지되었습니다.")
+        print("ROS 2 데이터 수집이 중지되었습니다.")
     
     def add_sync_data(self, sync_data: Dict):
         """
@@ -333,3 +343,13 @@ class ROSDataManager:
             max_frames: 유지할 최대 프레임 수
         """
         self.dataset.clear_old_data(max_frames)
+    
+    def _publish_status(self):
+        """데이터 관리자 상태 발행"""
+        try:
+            status_msg = f"Running: {self.is_running}, Frames: {len(self.dataset.images)}"
+            msg = String()
+            msg.data = status_msg
+            self.status_publisher.publish(msg)
+        except Exception as e:
+            self.get_logger().error(f"상태 발행 실패: {e}")

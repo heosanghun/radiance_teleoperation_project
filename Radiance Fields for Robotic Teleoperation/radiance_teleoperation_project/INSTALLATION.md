@@ -11,9 +11,9 @@
 - **네트워크**: 기가비트 이더넷
 
 #### 소프트웨어
-- **OS**: Ubuntu 20.04 LTS
-- **ROS**: Noetic
-- **Python**: 3.8+
+- **OS**: Ubuntu 22.04 LTS
+- **ROS**: Humble (ROS 2)
+- **Python**: 3.10+
 - **CUDA**: 11.8+
 - **Unity**: 2022.3.12f1 (VR 개발용)
 
@@ -30,23 +30,26 @@ cd radiance-teleoperation
 
 ### 3. 수동 설치
 
-#### 3.1 ROS Noetic 설치
+#### 3.1 ROS 2 Humble 설치
 
 ```bash
-# ROS 저장소 추가
-sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list'
-sudo apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654
+# ROS 2 저장소 추가
+sudo apt update && sudo apt install software-properties-common
+sudo add-apt-repository universe
+sudo apt update && sudo apt install curl
+sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key -o /usr/share/keyrings/ros-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 
-# ROS 설치
+# ROS 2 Humble 설치
 sudo apt update
-sudo apt install ros-noetic-desktop-full
+sudo apt install ros-humble-desktop
+
+# ROS 2 환경 설정
+echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
+source ~/.bashrc
 
 # 의존성 설치
-sudo apt install python3-rosdep python3-rosinstall python3-rosinstall-generator python3-wstool build-essential
-
-# rosdep 초기화
-sudo rosdep init
-rosdep update
+sudo apt install python3-colcon-common-extensions
 ```
 
 #### 3.2 CUDA 및 GPU 드라이버 설치
@@ -56,10 +59,10 @@ rosdep update
 sudo apt install nvidia-driver-470
 
 # CUDA Toolkit 설치
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
-sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600
-sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/7fa2af80.pub
-sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/ /"
+wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
+sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /"
 sudo apt update
 sudo apt install cuda-toolkit-11-8
 ```
@@ -74,7 +77,7 @@ $HOME/miniconda3/bin/conda init bash
 source ~/.bashrc
 
 # NerfStudio 환경 생성
-conda create --name nerfstudio -y python=3.8
+conda create --name nerfstudio -y python=3.10
 conda activate nerfstudio
 
 # PyTorch 설치
@@ -98,31 +101,31 @@ sudo apt update
 sudo apt install librealsense2-dkms librealsense2-utils librealsense2-dev
 ```
 
-#### 3.5 ROS 워크스페이스 설정
+#### 3.5 ROS 2 워크스페이스 설정
 
 ```bash
-# Catkin 워크스페이스 생성
-mkdir -p ~/catkin_ws/src
-cd ~/catkin_ws/
-catkin_make
+# Colcon 워크스페이스 생성
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/
+colcon build
 
 # 환경 설정
-echo "source ~/catkin_ws/devel/setup.bash" >> ~/.bashrc
-source ~/catkin_ws/devel/setup.bash
+echo "source ~/ros2_ws/install/setup.bash" >> ~/.bashrc
+source ~/ros2_ws/install/setup.bash
 ```
 
 ### 4. 프로젝트 빌드
 
 ```bash
 # 프로젝트 소스 복사
-cp -r src/* ~/catkin_ws/src/
+cp -r src/* ~/ros2_ws/src/
 
 # 의존성 설치
-cd ~/catkin_ws
+cd ~/ros2_ws
 rosdep install --from-paths src --ignore-src -r -y
 
 # 빌드
-catkin_make
+colcon build
 ```
 
 ### 5. Unity VR 프로젝트 설정
@@ -139,9 +142,9 @@ catkin_make
 # 카메라 설정 파일 편집
 nano config/camera_config.yaml
 
-# ROS 네트워크 설정
-export ROS_MASTER_URI=http://localhost:11311
-export ROS_HOSTNAME=your_ip_address
+# ROS 2 네트워크 설정
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
 ```
 
 ### 7. 설치 검증
@@ -163,11 +166,11 @@ sudo apt autoremove
 sudo apt install nvidia-driver-470
 ```
 
-#### ROS 토픽 연결 실패
+#### ROS 2 토픽 연결 실패
 ```bash
 # 네트워크 설정 확인
-export ROS_MASTER_URI=http://localhost:11311
-export ROS_HOSTNAME=$(hostname -I | awk '{print $1}')
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
 ```
 
 #### GPU 메모리 부족
@@ -179,8 +182,8 @@ export ROS_HOSTNAME=$(hostname -I | awk '{print $1}')
 ### 로그 확인
 
 ```bash
-# ROS 로그 확인
-rqt_console
+# ROS 2 로그 확인
+ros2 run rqt_console rqt_console
 
 # 시스템 리소스 모니터링
 htop

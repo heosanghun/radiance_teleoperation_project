@@ -10,7 +10,7 @@ ETH Zurich의 "Radiance Fields for Robotic Teleoperation" 논문을 바탕으로
 - **온라인 Radiance Field 훈련**: 다중 카메라 실시간 데이터로 학습
 - **다양한 방법 지원**: NeRF, 3DGS 등 여러 radiance field 방법 통합
 - **VR 시각화 시스템**: Meta Quest 3 기반 몰입형 인터페이스
-- **완전한 ROS 통합**: 기존 텔레오퍼레이션 시스템과 원활한 통합
+- **완전한 ROS 2 통합**: 기존 텔레오퍼레이션 시스템과 원활한 통합
 
 ### 목표 성능 지표
 - **품질**: NeRF PSNR > 20, 3DGS PSNR > 25
@@ -28,9 +28,9 @@ ETH Zurich의 "Radiance Fields for Robotic Teleoperation" 논문을 바탕으로
 - **네트워크**: 기가비트 이더넷
 
 ### 소프트웨어
-- **OS**: Ubuntu 20.04 LTS
-- **ROS**: Noetic
-- **Python**: 3.8+
+- **OS**: Ubuntu 22.04 LTS
+- **ROS**: Humble (ROS 2)
+- **Python**: 3.10+
 - **CUDA**: 11.8+
 - **Unity**: 2022.3.12f1
 - **NerfStudio**: 최신 버전
@@ -45,7 +45,7 @@ radiance_teleoperation_project/
 │   ├── radiance_viz/       # 시각화 관련 패키지
 │   └── radiance_robot/     # 로봇 통합 패키지
 ├── config/                 # 설정 파일
-├── launch/                 # ROS Launch 파일
+├── launch/                 # ROS 2 Launch 파일
 ├── scripts/                # 유틸리티 스크립트
 ├── test/                   # 테스트 코드
 ├── docs/                   # 문서
@@ -64,13 +64,13 @@ radiance_teleoperation_project/
 ### 2. 데이터 수집
 ```bash
 # Phase 2: 데이터 수집 및 처리 파이프라인
-roslaunch radiance_camera multi_camera.launch
+ros2 launch radiance_camera multi_camera.launch.py
 ```
 
 ### 3. NeRF 훈련
 ```bash
 # Phase 3: Radiance Field 통합
-roslaunch radiance_nerf online_training.launch
+ros2 launch radiance_nerf online_training.launch.py
 ```
 
 ### 4. VR 시각화

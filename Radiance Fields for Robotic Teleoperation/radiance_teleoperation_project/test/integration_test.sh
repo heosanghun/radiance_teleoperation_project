@@ -56,11 +56,12 @@ record_test() {
 test_environment_setup() {
     log_info "환경 설정 테스트 시작..."
     
-    # ROS 환경 확인
-    if command -v roscore &> /dev/null; then
-        record_test "ROS_Installation" "PASS" "ROS가 정상적으로 설치됨"
+    # ROS 2 환경 확인
+    if command -v ros2 &> /dev/null; then
+        record_test "ROS2_Installation" "PASS" "ROS 2가 정상적으로 설치됨"
+        ros2 --version
     else
-        record_test "ROS_Installation" "FAIL" "ROS가 설치되지 않음"
+        record_test "ROS2_Installation" "FAIL" "ROS 2가 설치되지 않음"
         return 1
     fi
     
@@ -118,35 +119,35 @@ test_hardware_connection() {
     fi
 }
 
-# ROS 패키지 빌드 테스트
-test_ros_build() {
-    log_info "ROS 패키지 빌드 테스트 시작..."
+# ROS 2 패키지 빌드 테스트
+test_ros2_build() {
+    log_info "ROS 2 패키지 빌드 테스트 시작..."
     
-    # Catkin workspace 확인
-    if [ -d "$HOME/catkin_ws" ]; then
-        cd "$HOME/catkin_ws"
+    # Colcon workspace 확인
+    if [ -d "$HOME/ros2_ws" ]; then
+        cd "$HOME/ros2_ws"
         
         # 의존성 설치
         if rosdep install --from-paths src --ignore-src -r -y; then
-            record_test "ROS_Dependencies" "PASS" "ROS 의존성 설치 성공"
+            record_test "ROS2_Dependencies" "PASS" "ROS 2 의존성 설치 성공"
         else
-            record_test "ROS_Dependencies" "FAIL" "ROS 의존성 설치 실패"
+            record_test "ROS2_Dependencies" "FAIL" "ROS 2 의존성 설치 실패"
             return 1
         fi
         
         # 빌드 테스트
-        if catkin_make; then
-            record_test "ROS_Build" "PASS" "ROS 패키지 빌드 성공"
+        if colcon build; then
+            record_test "ROS2_Build" "PASS" "ROS 2 패키지 빌드 성공"
         else
-            record_test "ROS_Build" "FAIL" "ROS 패키지 빌드 실패"
+            record_test "ROS2_Build" "FAIL" "ROS 2 패키지 빌드 실패"
             return 1
         fi
         
         # 환경 설정
-        source devel/setup.bash
-        record_test "ROS_Environment" "PASS" "ROS 환경 설정 완료"
+        source install/setup.bash
+        record_test "ROS2_Environment" "PASS" "ROS 2 환경 설정 완료"
     else
-        record_test "ROS_Workspace" "FAIL" "Catkin workspace가 존재하지 않음"
+        record_test "ROS2_Workspace" "FAIL" "Colcon workspace가 존재하지 않음"
         return 1
     fi
 }
@@ -155,13 +156,13 @@ test_ros_build() {
 test_multi_camera_node() {
     log_info "멀티 카메라 노드 테스트 시작..."
     
-    # ROS 마스터 시작
-    roscore &
-    ROSCORE_PID=$!
+    # ROS 2 데몬 시작
+    ros2 daemon start &
+    DAEMON_PID=$!
     sleep 3
     
     # 멀티 카메라 노드 실행
-    if rosrun radiance_camera multi_camera_node.py --test-mode; then
+    if ros2 run radiance_camera multi_camera_node --ros-args --test-mode; then
         record_test "MultiCamera_Node" "PASS" "멀티 카메라 노드 실행 성공"
     else
         record_test "MultiCamera_Node" "FAIL" "멀티 카메라 노드 실행 실패"
@@ -169,14 +170,14 @@ test_multi_camera_node() {
     
     # 토픽 확인
     sleep 2
-    if rostopic list | grep -q "/camera_stats"; then
+    if ros2 topic list | grep -q "/camera_stats"; then
         record_test "Camera_Topics" "PASS" "카메라 토픽이 정상적으로 발행됨"
     else
         record_test "Camera_Topics" "FAIL" "카메라 토픽이 발행되지 않음"
     fi
     
-    # ROS 마스터 종료
-    kill $ROSCORE_PID 2>/dev/null || true
+    # ROS 2 데몬 종료
+    kill $DAEMON_PID 2>/dev/null || true
 }
 
 # NeRF 훈련 테스트
@@ -292,30 +293,30 @@ test_integrated_system() {
     # 전체 시스템 시뮬레이션
     log_info "전체 시스템 통합 테스트 실행 중..."
     
-    # 1. ROS 마스터 시작
-    roscore &
-    ROSCORE_PID=$!
+    # 1. ROS 2 데몬 시작
+    ros2 daemon start &
+    DAEMON_PID=$!
     sleep 3
     
     # 2. 멀티 카메라 노드 시작
-    rosrun radiance_camera multi_camera_node.py --test-mode &
+    ros2 run radiance_camera multi_camera_node --ros-args --test-mode &
     CAMERA_PID=$!
     sleep 2
     
     # 3. NeRF 훈련 노드 시작
-    rosrun radiance_nerf online_trainer.py --test-mode &
+    ros2 run radiance_nerf online_trainer --ros-args --test-mode &
     TRAINER_PID=$!
     sleep 2
     
     # 4. 시스템 상태 확인
-    if rostopic list | grep -q "/camera_stats" && rostopic list | grep -q "/nerf/training_stats"; then
+    if ros2 topic list | grep -q "/camera_stats" && ros2 topic list | grep -q "/training_stats"; then
         record_test "Integrated_System" "PASS" "통합 시스템이 정상적으로 작동함"
     else
         record_test "Integrated_System" "FAIL" "통합 시스템 작동 실패"
     fi
     
     # 5. 정리
-    kill $CAMERA_PID $TRAINER_PID $ROSCORE_PID 2>/dev/null || true
+    kill $CAMERA_PID $TRAINER_PID $DAEMON_PID 2>/dev/null || true
     sleep 2
 }
 
@@ -350,7 +351,7 @@ main() {
     # 테스트 실행
     test_environment_setup
     test_hardware_connection
-    test_ros_build
+    test_ros2_build
     test_multi_camera_node
     test_nerf_training
     test_vr_connection
